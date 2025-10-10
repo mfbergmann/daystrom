@@ -60,3 +60,7 @@ temp/
 token.json
 credentials.json
 
+
+# Backup files
+*.bak
+*.backup*

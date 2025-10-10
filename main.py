@@ -35,10 +35,17 @@ async def lifespan(app: FastAPI):
     task_scheduler.start()
     logger.info("Task scheduler started")
     
-    yield
+    # Initialize Telegram handler
+    await telegram_handler.initialize()
+    logger.info("Telegram handler initialized")
+
     
-    # Shutdown
+    yield    # Shutdown
     logger.info("Shutting down Daystrom application")
+    try:
+        await telegram_handler.shutdown()
+    except Exception as e:
+        logger.error(f"Error shutting down Telegram handler: {e}")
     task_scheduler.stop()
 
 

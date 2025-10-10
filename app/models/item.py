@@ -38,13 +38,12 @@ class Item(Base):
     media_type = Column(String, nullable=True)  # voice, photo, text
     media_file_id = Column(String, nullable=True)
     
-    # Status
-    completed = Column(SQLEnum(enum.Enum("ItemStatus", "pending active completed cancelled")), 
-                       default="pending", index=True)
+    # Status - Changed from enum to string to match database schema
+    completed = Column(String, default="pending", index=True)  # pending, active, completed, cancelled
     completed_at = Column(DateTime(timezone=True), nullable=True)
     
     # Metadata
-    metadata = Column(JSON, default=dict)
+    item_metadata = Column(JSON, default=dict)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
@@ -55,4 +54,3 @@ class Item(Base):
     
     def __repr__(self):
         return f"<Item(id={self.id}, type={self.item_type}, content='{self.content[:50]}...')>"
-
