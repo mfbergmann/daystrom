@@ -1,2 +1,0 @@
-"""Daystrom application package."""
-
