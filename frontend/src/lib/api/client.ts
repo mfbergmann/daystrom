@@ -72,6 +72,43 @@ export type MemoryStats = {
 	avg_confidence: number;
 };
 
+export type ConversationSummary = {
+	id: string;
+	title: string | null;
+	created_at: string;
+	updated_at: string;
+	message_count: number;
+};
+
+export type ChatMessage = {
+	id: string;
+	role: string;
+	content: string;
+	created_at: string;
+};
+
+export type Conversation = {
+	id: string;
+	title: string | null;
+	created_at: string;
+	updated_at: string;
+	messages: ChatMessage[];
+};
+
+export type AgentTask = {
+	id: string;
+	source_item_id: string | null;
+	task_type: string;
+	prompt: string;
+	status: string;
+	steps: { action: string; result: string; timestamp: string }[] | null;
+	result_summary: string | null;
+	result_items: string[] | null;
+	created_at: string;
+	started_at: string | null;
+	completed_at: string | null;
+};
+
 export const api = {
 	// Auth
 	authStatus: () => request<{ auth_required: boolean }>('/auth/status'),
@@ -132,6 +169,38 @@ export const api = {
 	behavioralModel: () => request<any>('/learning/model'),
 	associations: (itemId: string) => request<any[]>(`/learning/associations/${itemId}`),
 	interactions: (limit = 50) => request<any[]>(`/learning/interactions?limit=${limit}`),
+
+	// Chat
+	sendChat: (message: string, conversationId?: string) =>
+		request<{ conversation_id: string; message: string }>('/chat', {
+			method: 'POST',
+			body: JSON.stringify({ message, conversation_id: conversationId })
+		}),
+	listConversations: (limit = 20) =>
+		request<ConversationSummary[]>(`/conversations?limit=${limit}`),
+	getConversation: (id: string) =>
+		request<Conversation>(`/conversations/${id}`),
+	deleteConversation: (id: string) =>
+		request<void>(`/conversations/${id}`, { method: 'DELETE' }),
+
+	// Agent Tasks
+	listAgentTasks: (params?: { status?: string; limit?: number }) => {
+		const search = new URLSearchParams();
+		if (params) {
+			Object.entries(params).forEach(([k, v]) => {
+				if (v !== undefined) search.set(k, String(v));
+			});
+		}
+		return request<{ tasks: AgentTask[]; total: number }>(`/agent-tasks?${search}`);
+	},
+	getAgentTask: (id: string) => request<AgentTask>(`/agent-tasks/${id}`),
+	createAgentTask: (prompt: string, taskType = 'custom') =>
+		request<AgentTask>('/agent-tasks', {
+			method: 'POST',
+			body: JSON.stringify({ prompt, task_type: taskType })
+		}),
+	cancelAgentTask: (id: string) =>
+		request<AgentTask>(`/agent-tasks/${id}/cancel`, { method: 'POST' }),
 
 	// Health
 	health: () => request<{ status: string; database: boolean; ollama: boolean }>('/health'),

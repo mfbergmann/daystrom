@@ -1,6 +1,10 @@
+import { writable } from 'svelte/store';
 import { updateItemInStore } from './items';
 
 let eventSource: EventSource | null = null;
+
+// Agent task events store
+export const agentEvents = writable<{ type: string; data: any }[]>([]);
 
 export function connectSSE() {
 	if (typeof window === 'undefined') return;
@@ -25,6 +29,35 @@ export function connectSSE() {
 		} catch (err) {
 			console.error('SSE parse error:', err);
 		}
+	});
+
+	// Agent events
+	eventSource.addEventListener('agent_started', (e) => {
+		try {
+			const data = JSON.parse(e.data);
+			agentEvents.update(events => [...events.slice(-50), { type: 'started', data }]);
+		} catch (err) { /* ignore */ }
+	});
+
+	eventSource.addEventListener('agent_step', (e) => {
+		try {
+			const data = JSON.parse(e.data);
+			agentEvents.update(events => [...events.slice(-50), { type: 'step', data }]);
+		} catch (err) { /* ignore */ }
+	});
+
+	eventSource.addEventListener('agent_completed', (e) => {
+		try {
+			const data = JSON.parse(e.data);
+			agentEvents.update(events => [...events.slice(-50), { type: 'completed', data }]);
+		} catch (err) { /* ignore */ }
+	});
+
+	eventSource.addEventListener('agent_failed', (e) => {
+		try {
+			const data = JSON.parse(e.data);
+			agentEvents.update(events => [...events.slice(-50), { type: 'failed', data }]);
+		} catch (err) { /* ignore */ }
 	});
 
 	eventSource.addEventListener('ping', () => {

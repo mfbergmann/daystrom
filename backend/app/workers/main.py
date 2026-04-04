@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 HANDLERS = {
     "enrich_item": enrich_item,
+    "run_agent": None,  # Set below to avoid circular import
     "learning_sweep": None,  # Set below to avoid circular import
 }
 
@@ -49,6 +50,13 @@ async def handle_learning_sweep(ctx: dict):
     await run_learning_sweep()
 
 
+async def handle_run_agent(ctx: dict, task_id: str):
+    """Run an autonomous agent task."""
+    from app.services.agent_service import run_agent
+    await run_agent(ctx, task_id)
+
+
+HANDLERS["run_agent"] = handle_run_agent
 HANDLERS["learning_sweep"] = handle_learning_sweep
 
 

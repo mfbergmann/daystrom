@@ -12,8 +12,8 @@
 		{ href: '/', label: 'Inbox', icon: '📥' },
 		{ href: '/active', label: 'Active', icon: '⚡' },
 		{ href: '/chat', label: 'Chat', icon: '💬' },
+		{ href: '/agents', label: 'Agents', icon: '🤖' },
 		{ href: '/search', label: 'Search', icon: '🔍' },
-		{ href: '/settings', label: 'Brain', icon: '🧠' },
 	];
 </script>
 

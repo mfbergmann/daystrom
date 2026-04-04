@@ -137,7 +137,18 @@ async def enrich_item(ctx: dict, item_id: str):
             except Exception as e:
                 logger.warning(f"Association discovery failed for {item_id}: {e}")
 
-            # 7. Push SSE event
+            # 7. Auto-spawn agent task if item is actionable
+            if item.ai_metadata and item.ai_metadata.get("is_actionable_by_agent"):
+                try:
+                    from app.services.agent_service import detect_agent_task_type, create_agent_task
+                    task_type = detect_agent_task_type(item.content, item.ai_metadata)
+                    if task_type:
+                        await create_agent_task(db, item.id, item.content, task_type)
+                        logger.info(f"Spawned agent task for item {item_id}: {task_type.value}")
+                except Exception as e:
+                    logger.warning(f"Agent task creation failed for {item_id}: {e}")
+
+            # 8. Push SSE event
             await publish_event("item_enriched", {
                 "item_id": item_id,
                 "item_type": item.item_type.value if item.item_type else None,
