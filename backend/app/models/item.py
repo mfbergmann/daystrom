@@ -3,8 +3,7 @@ import uuid
 from datetime import datetime, timezone
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import String, Text, Enum, Float, DateTime, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import String, Text, Enum, Float, DateTime, ForeignKey, Index, Uuid, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.config import settings
@@ -36,7 +35,7 @@ class EnrichmentStatus(str, enum.Enum):
 class Item(Base):
     __tablename__ = "items"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     parsed_title: Mapped[str | None] = mapped_column(String(500))
     item_type: Mapped[ItemType | None] = mapped_column(Enum(ItemType))
@@ -48,11 +47,11 @@ class Item(Base):
     due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("items.id"), nullable=True
+        Uuid, ForeignKey("items.id"), nullable=True
     )
     embedding: Mapped[list | None] = mapped_column(Vector(settings.embedding_dimensions))
     ai_confidence: Mapped[float | None] = mapped_column(Float)
-    ai_metadata: Mapped[dict | None] = mapped_column(JSONB)
+    ai_metadata: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

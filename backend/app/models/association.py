@@ -2,8 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Enum, Float, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Enum, Float, DateTime, ForeignKey, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -25,12 +24,12 @@ class AssociationSource(str, enum.Enum):
 class Association(Base):
     __tablename__ = "associations"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     item_a_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("items.id"), nullable=False
+        Uuid, ForeignKey("items.id"), nullable=False
     )
     item_b_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("items.id"), nullable=False
+        Uuid, ForeignKey("items.id"), nullable=False
     )
     association_type: Mapped[AssociationType] = mapped_column(Enum(AssociationType))
     strength: Mapped[float] = mapped_column(Float, default=0.5)
