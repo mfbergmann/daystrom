@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.database import engine, Base
-from app.routers import items, tags, search, events, auth, health
+from app.routers import items, tags, search, events, auth, health, memory, learning
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -44,6 +44,8 @@ app.include_router(items.router)
 app.include_router(tags.router)
 app.include_router(search.router)
 app.include_router(events.router)
+app.include_router(memory.router)
+app.include_router(learning.router)
 
 
 @app.get("/")

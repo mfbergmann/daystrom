@@ -14,7 +14,9 @@ from app.models.tag import Tag
 from app.models.item_tag import ItemTag, TagSource
 from app.services.classifier import classify_item
 from app.services.embedding_service import embed_text, find_similar_items
-from app.services.memory_service import extract_memories, build_context_block
+from app.services.memory_service import extract_memories
+from app.services.context_service import assemble_classification_context
+from app.models.association import Association, AssociationType, AssociationSource
 from app.routers.events import publish_event
 
 logger = logging.getLogger(__name__)
@@ -50,8 +52,8 @@ async def enrich_item(ctx: dict, item_id: str):
             return
 
         try:
-            # Build context from memories
-            context = await build_context_block(db, item.content)
+            # Build rich context from memories + corrections + tags
+            context = await assemble_classification_context(db, item.content)
 
             # 1. Classify
             classification = await classify_item(item.content, context=context)
@@ -117,7 +119,25 @@ async def enrich_item(ctx: dict, item_id: str):
             except Exception as e:
                 logger.warning(f"Memory extraction failed for {item_id}: {e}")
 
-            # 6. Push SSE event
+            # 6. Discover associations with existing items
+            try:
+                similar = await find_similar_items(db, item, limit=3)
+                for similar_item, distance in similar:
+                    similarity = 1 - distance
+                    if similarity >= 0.7:
+                        assoc = Association(
+                            item_a_id=item.id,
+                            item_b_id=similar_item.id,
+                            association_type=AssociationType.similar,
+                            strength=similarity,
+                            source=AssociationSource.ai,
+                        )
+                        db.add(assoc)
+                await db.commit()
+            except Exception as e:
+                logger.warning(f"Association discovery failed for {item_id}: {e}")
+
+            # 7. Push SSE event
             await publish_event("item_enriched", {
                 "item_id": item_id,
                 "item_type": item.item_type.value if item.item_type else None,

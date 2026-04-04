@@ -1,8 +1,9 @@
-"""ARQ worker entrypoint."""
+"""ARQ worker entrypoint with scheduled learning sweep."""
 
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 
 import redis.asyncio as aioredis
 
@@ -14,20 +15,58 @@ logger = logging.getLogger(__name__)
 
 HANDLERS = {
     "enrich_item": enrich_item,
+    "learning_sweep": None,  # Set below to avoid circular import
 }
+
+# Run the learning sweep once per day at 3 AM
+LEARNING_SWEEP_HOUR = 3
+_last_sweep_date: str | None = None
+
+
+async def maybe_run_learning_sweep():
+    """Check if it's time for the daily learning sweep."""
+    global _last_sweep_date
+    now = datetime.now(timezone.utc)
+    today = now.strftime("%Y-%m-%d")
+
+    if _last_sweep_date == today:
+        return
+    if now.hour != LEARNING_SWEEP_HOUR:
+        return
+
+    _last_sweep_date = today
+    logger.info("Triggering daily learning sweep")
+    try:
+        from app.services.learning_service import run_learning_sweep
+        await run_learning_sweep()
+    except Exception as e:
+        logger.error(f"Learning sweep failed: {e}", exc_info=True)
+
+
+async def handle_learning_sweep(ctx: dict):
+    """Manual trigger for learning sweep."""
+    from app.services.learning_service import run_learning_sweep
+    await run_learning_sweep()
+
+
+HANDLERS["learning_sweep"] = handle_learning_sweep
 
 
 async def worker_loop():
     """Simple Redis-based worker loop.
 
     Pulls jobs from 'arq:queue' list and dispatches to handlers.
+    Also checks for scheduled tasks between job processing.
     """
     r = aioredis.from_url(settings.redis_url)
     logger.info("Daystrom worker started, waiting for jobs...")
 
     try:
         while True:
-            # BLPOP blocks until a job is available (5s timeout for graceful shutdown checks)
+            # Check scheduled tasks
+            await maybe_run_learning_sweep()
+
+            # BLPOP blocks until a job is available (5s timeout for scheduled task checks)
             result = await r.blpop("arq:queue", timeout=5)
             if result is None:
                 continue

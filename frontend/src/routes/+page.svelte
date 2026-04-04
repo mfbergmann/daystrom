@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { items, loading, captureItem, loadItems, completeItem, deleteItem } from '$lib/stores/items';
+	import { items, loading, captureItem, loadItems, completeItem, deleteItem, updateItemInStore } from '$lib/stores/items';
+	import { api } from '$lib/api/client';
 
 	let inputValue = $state('');
 	let inputEl: HTMLInputElement;
@@ -133,10 +134,20 @@
 									</span>
 								{:else}
 									{#each item.tags as tag}
-										<span class="inline-block bg-slate-800 rounded-full px-2.5 py-0.5 text-xs text-slate-400
-											{tag.source === 'user' ? 'border border-blue-800' : ''}">
+										<button
+											onclick={async () => {
+												await api.removeTagFromItem(item.id, tag.name);
+												const refreshed = await api.getItem(item.id);
+												updateItemInStore(refreshed);
+											}}
+											class="inline-flex items-center gap-0.5 bg-slate-800 rounded-full px-2.5 py-0.5 text-xs text-slate-400
+												hover:bg-red-900/30 hover:text-red-400 transition-colors cursor-pointer
+												{tag.source === 'user' ? 'border border-blue-800' : ''}"
+											title="Click to remove tag"
+										>
 											{tag.name}
-										</span>
+											<span class="opacity-0 group-hover:opacity-100 ml-0.5">x</span>
+										</button>
 									{/each}
 								{/if}
 

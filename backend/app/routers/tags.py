@@ -10,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.tag import Tag
-from app.models.item_tag import ItemTag
+from app.models.item import Item
+from app.models.item_tag import ItemTag, TagSource
+from app.models.interaction import Interaction, InteractionType
 
 router = APIRouter(prefix="/api/tags", tags=["tags"])
 
@@ -111,3 +113,86 @@ async def merge_tags(
 
     await db.commit()
     return {"merged": len(body.source_ids), "into": str(body.target_id)}
+
+
+class ItemTagAdd(BaseModel):
+    tag_name: str
+
+
+@router.post("/items/{item_id}/tags", status_code=201)
+async def add_tag_to_item(
+    item_id: UUID,
+    body: ItemTagAdd,
+    db: AsyncSession = Depends(get_db),
+    _user: bool = Depends(get_current_user),
+):
+    """Add a user-specified tag to an item."""
+    result = await db.execute(select(Item).where(Item.id == item_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    tag_name = body.tag_name.strip().lower()
+
+    # Get or create tag
+    result = await db.execute(select(Tag).where(Tag.name == tag_name))
+    tag = result.scalar_one_or_none()
+    if not tag:
+        tag = Tag(name=tag_name, auto_generated=False)
+        db.add(tag)
+        await db.flush()
+
+    # Check existing
+    existing = await db.execute(
+        select(ItemTag).where(ItemTag.item_id == item_id, ItemTag.tag_id == tag.id)
+    )
+    if existing.scalar_one_or_none():
+        return {"status": "already_tagged"}
+
+    item_tag = ItemTag(item_id=item_id, tag_id=tag.id, source=TagSource.user, confidence=1.0)
+    db.add(item_tag)
+    tag.usage_count += 1
+
+    interaction = Interaction(
+        item_id=item_id,
+        interaction_type=InteractionType.tag_accepted,
+        context={"tag_name": tag_name, "action": "add"},
+    )
+    db.add(interaction)
+    await db.commit()
+    return {"status": "added", "tag_name": tag_name}
+
+
+@router.delete("/items/{item_id}/tags/{tag_name}", status_code=200)
+async def remove_tag_from_item(
+    item_id: UUID,
+    tag_name: str,
+    db: AsyncSession = Depends(get_db),
+    _user: bool = Depends(get_current_user),
+):
+    """Remove a tag from an item. Tracks as rejection if AI-assigned."""
+    tag_name = tag_name.strip().lower()
+    result = await db.execute(select(Tag).where(Tag.name == tag_name))
+    tag = result.scalar_one_or_none()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+
+    result = await db.execute(
+        select(ItemTag).where(ItemTag.item_id == item_id, ItemTag.tag_id == tag.id)
+    )
+    item_tag = result.scalar_one_or_none()
+    if not item_tag:
+        raise HTTPException(status_code=404, detail="Tag not on item")
+
+    # Track as rejection if it was AI-assigned
+    if item_tag.source == TagSource.ai:
+        interaction = Interaction(
+            item_id=item_id,
+            interaction_type=InteractionType.tag_rejected,
+            context={"tag_name": tag_name},
+        )
+        db.add(interaction)
+
+    await db.delete(item_tag)
+    tag.usage_count = max(0, tag.usage_count - 1)
+    await db.commit()
+    return {"status": "removed", "tag_name": tag_name}

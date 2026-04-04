@@ -70,7 +70,7 @@
 					<div class="flex items-start justify-between gap-2">
 						<p class="text-sm text-slate-200">{result.parsed_title || result.content}</p>
 						<span class="text-xs text-blue-400 flex-shrink-0">
-							{Math.round(result.similarity * 100)}%
+							{Math.round(result.score * 100)}%
 						</span>
 					</div>
 					{#if result.item_type}

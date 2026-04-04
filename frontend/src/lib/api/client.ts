@@ -56,6 +56,22 @@ export type Tag = {
 	auto_generated: boolean;
 };
 
+export type Memory = {
+	id: string;
+	content: string;
+	memory_type: string;
+	confidence: number;
+	access_count: number;
+	created_at: string;
+	updated_at: string;
+};
+
+export type MemoryStats = {
+	total: number;
+	by_type: Record<string, number>;
+	avg_confidence: number;
+};
+
 export const api = {
 	// Auth
 	authStatus: () => request<{ auth_required: boolean }>('/auth/status'),
@@ -86,10 +102,36 @@ export const api = {
 
 	// Tags
 	listTags: () => request<Tag[]>('/tags'),
+	addTagToItem: (itemId: string, tagName: string) =>
+		request<any>(`/tags/items/${itemId}/tags`, {
+			method: 'POST', body: JSON.stringify({ tag_name: tagName })
+		}),
+	removeTagFromItem: (itemId: string, tagName: string) =>
+		request<any>(`/tags/items/${itemId}/tags/${encodeURIComponent(tagName)}`, { method: 'DELETE' }),
 
 	// Search
 	search: (q: string, limit = 20) =>
 		request<any[]>(`/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+
+	// Memories
+	listMemories: (params?: { memory_type?: string; limit?: number }) => {
+		const search = new URLSearchParams();
+		if (params) {
+			Object.entries(params).forEach(([k, v]) => {
+				if (v !== undefined) search.set(k, String(v));
+			});
+		}
+		return request<Memory[]>(`/memories?${search}`);
+	},
+	memoryStats: () => request<MemoryStats>('/memories/stats'),
+	updateMemory: (id: string, data: { content?: string; confidence?: number }) =>
+		request<Memory>(`/memories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+	deleteMemory: (id: string) => request<void>(`/memories/${id}`, { method: 'DELETE' }),
+
+	// Learning
+	behavioralModel: () => request<any>('/learning/model'),
+	associations: (itemId: string) => request<any[]>(`/learning/associations/${itemId}`),
+	interactions: (limit = 50) => request<any[]>(`/learning/interactions?limit=${limit}`),
 
 	// Health
 	health: () => request<{ status: string; database: boolean; ollama: boolean }>('/health'),

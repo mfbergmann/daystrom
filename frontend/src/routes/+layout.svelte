@@ -13,6 +13,7 @@
 		{ href: '/active', label: 'Active', icon: '⚡' },
 		{ href: '/chat', label: 'Chat', icon: '💬' },
 		{ href: '/search', label: 'Search', icon: '🔍' },
+		{ href: '/settings', label: 'Brain', icon: '🧠' },
 	];
 </script>
 
