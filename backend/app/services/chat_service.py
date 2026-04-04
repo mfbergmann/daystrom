@@ -153,12 +153,23 @@ async def _build_chat_messages(
     return messages
 
 
+def _normalize_tool_args(args) -> dict:
+    """Normalize tool call arguments — some models return JSON string instead of dict."""
+    if isinstance(args, str):
+        try:
+            import json as _json
+            return _json.loads(args)
+        except (ValueError, TypeError):
+            return {}
+    return args if isinstance(args, dict) else {}
+
+
 async def _handle_tool_calls(db: AsyncSession, tool_calls: list[dict]) -> list[dict]:
     """Execute tool calls from the AI and return results."""
     results = []
     for call in tool_calls:
         func_name = call.get("function", {}).get("name", "")
-        args = call.get("function", {}).get("arguments", {})
+        args = _normalize_tool_args(call.get("function", {}).get("arguments", {}))
 
         if func_name == "create_item":
             content = args.get("content", "")

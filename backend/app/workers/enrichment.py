@@ -66,7 +66,11 @@ async def enrich_item(ctx: dict, item_id: str):
 
             if classification.get("due_date") and not item.due_date:
                 try:
-                    item.due_date = datetime.fromisoformat(classification["due_date"])
+                    parsed_date = datetime.fromisoformat(classification["due_date"])
+                    # Ensure timezone-aware (default to UTC if naive)
+                    if parsed_date.tzinfo is None:
+                        parsed_date = parsed_date.replace(tzinfo=timezone.utc)
+                    item.due_date = parsed_date
                 except (ValueError, TypeError):
                     pass
 

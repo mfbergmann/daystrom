@@ -340,7 +340,15 @@ async def run_agent(ctx: dict, task_id: str):
                 # Process tool calls
                 for call in tool_calls:
                     func_name = call.get("function", {}).get("name", "")
-                    func_args = call.get("function", {}).get("arguments", {})
+                    raw_args = call.get("function", {}).get("arguments", {})
+                    # Normalize args — some models return JSON string instead of dict
+                    if isinstance(raw_args, str):
+                        try:
+                            func_args = json.loads(raw_args)
+                        except (ValueError, TypeError):
+                            func_args = {}
+                    else:
+                        func_args = raw_args if isinstance(raw_args, dict) else {}
 
                     tool_result = await _execute_tool(db, func_name, func_args, task)
 

@@ -30,7 +30,8 @@
 		const updateOnlineStatus = () => {
 			isOffline = !navigator.onLine;
 			if (navigator.onLine && navigator.serviceWorker?.controller) {
-				navigator.serviceWorker.controller.postMessage({ type: 'SYNC_OFFLINE' });
+				const token = localStorage.getItem('daystrom_token');
+				navigator.serviceWorker.controller.postMessage({ type: 'SYNC_OFFLINE', token });
 			}
 		};
 		window.addEventListener('online', updateOnlineStatus);
