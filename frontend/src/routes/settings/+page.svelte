@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api, type Memory, type MemoryStats } from '$lib/api/client';
 
-	let activeTab = $state<'memories' | 'model' | 'health'>('memories');
+	let activeTab = $state<'digest' | 'memories' | 'model' | 'health'>('digest');
 
 	// Memories
 	let memories = $state<Memory[]>([]);
@@ -14,12 +14,15 @@
 	let model = $state<any>(null);
 	let loadingModel = $state(false);
 
+	// Digest
+	let digest = $state<any>(null);
+	let loadingDigest = $state(false);
+
 	// Health
 	let health = $state<any>(null);
 
 	onMount(() => {
-		loadMemories();
-		loadStats();
+		loadDigest();
 	});
 
 	async function loadMemories() {
@@ -52,8 +55,16 @@
 		await loadStats();
 	}
 
+	async function loadDigest() {
+		loadingDigest = true;
+		try { digest = await api.dailyDigest(); } catch (e) { console.error(e); }
+		loadingDigest = false;
+	}
+
 	function switchTab(tab: typeof activeTab) {
 		activeTab = tab;
+		if (tab === 'digest' && !digest) loadDigest();
+		if (tab === 'memories' && memories.length === 0) { loadMemories(); loadStats(); }
 		if (tab === 'model' && !model) loadModel();
 		if (tab === 'health' && !health) loadHealth();
 	}
@@ -79,12 +90,13 @@
 
 <div class="max-w-lg mx-auto px-4 pt-[var(--sat)]">
 	<header class="pt-6 pb-4">
-		<h1 class="text-2xl font-bold text-slate-100">Settings</h1>
+		<h1 class="text-2xl font-bold text-slate-100">Brain</h1>
+		<p class="text-sm text-slate-500 mt-1">Daystrom's intelligence dashboard</p>
 	</header>
 
 	<!-- Tab bar -->
 	<div class="flex gap-1 bg-slate-900 rounded-xl p-1 mb-4">
-		{#each [['memories', '🧠 Memories'], ['model', '📊 Model'], ['health', '💚 Health']] as [tab, label]}
+		{#each [['digest', 'Digest'], ['memories', 'Memories'], ['model', 'Model'], ['health', 'Health']] as [tab, label]}
 			<button
 				onclick={() => switchTab(tab as any)}
 				class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors
@@ -95,8 +107,74 @@
 		{/each}
 	</div>
 
+	<!-- Digest tab -->
+	{#if activeTab === 'digest'}
+		{#if loadingDigest}
+			<div class="text-center py-8 text-slate-500">Loading digest...</div>
+		{:else if digest}
+			<div class="space-y-3">
+				<!-- Activity summary -->
+				<div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+					<h3 class="text-sm font-semibold text-slate-300 mb-3">Last 24 Hours</h3>
+					<div class="grid grid-cols-2 gap-3">
+						<div class="text-center">
+							<p class="text-2xl font-bold text-sky-400">{digest.items_captured}</p>
+							<p class="text-xs text-slate-500">Captured</p>
+						</div>
+						<div class="text-center">
+							<p class="text-2xl font-bold text-green-400">{digest.items_completed}</p>
+							<p class="text-xs text-slate-500">Completed</p>
+						</div>
+						<div class="text-center">
+							<p class="text-2xl font-bold text-purple-400">{digest.new_memories}</p>
+							<p class="text-xs text-slate-500">New Memories</p>
+						</div>
+						<div class="text-center">
+							<p class="text-2xl font-bold text-amber-400">{digest.agent_tasks_completed}</p>
+							<p class="text-xs text-slate-500">Agent Tasks Done</p>
+						</div>
+					</div>
+				</div>
+
+				<!-- Overdue items -->
+				{#if digest.items_overdue > 0}
+					<div class="bg-red-950/30 rounded-xl p-4 border border-red-900/50">
+						<h3 class="text-sm font-semibold text-red-300 mb-2">Overdue ({digest.items_overdue})</h3>
+						{#each digest.overdue as item}
+							<p class="text-sm text-red-200 py-0.5">{item.content}</p>
+						{/each}
+					</div>
+				{/if}
+
+				<!-- Recent completions -->
+				{#if digest.recent_completions?.length > 0}
+					<div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+						<h3 class="text-sm font-semibold text-slate-300 mb-2">Recently Completed</h3>
+						{#each digest.recent_completions as item}
+							<p class="text-sm text-slate-400 py-0.5 line-through">{item.content}</p>
+						{/each}
+					</div>
+				{/if}
+
+				<!-- Tag merge suggestions -->
+				{#if digest.tag_merge_suggestions?.length > 0}
+					<div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+						<h3 class="text-sm font-semibold text-slate-300 mb-2">Tag Merge Suggestions</h3>
+						{#each digest.tag_merge_suggestions as suggestion}
+							<p class="text-sm text-slate-400 py-0.5">
+								Merge <span class="text-sky-400">{suggestion.source}</span> into <span class="text-sky-400">{suggestion.target}</span>
+								<span class="text-slate-600">({suggestion.reason})</span>
+							</p>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{:else}
+			<div class="text-center py-8 text-slate-500">No digest data available</div>
+		{/if}
+
 	<!-- Memories tab -->
-	{#if activeTab === 'memories'}
+	{:else if activeTab === 'memories'}
 		<!-- Stats bar -->
 		{#if memoryStats}
 			<div class="flex gap-3 mb-4 text-sm">

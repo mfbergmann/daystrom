@@ -4,20 +4,68 @@
 	import { connectSSE } from '$lib/stores/sse';
 	import { page } from '$app/stores';
 
+	let isOffline = $state(false);
+	let offlineSyncMessage = $state('');
+
 	onMount(() => {
 		connectSSE();
+
+		// Register service worker
+		if ('serviceWorker' in navigator) {
+			navigator.serviceWorker.register('/service-worker.js').catch((err) => {
+				console.warn('SW registration failed:', err);
+			});
+
+			// Listen for offline sync messages
+			navigator.serviceWorker.addEventListener('message', (event) => {
+				if (event.data?.type === 'OFFLINE_SYNC_COMPLETE') {
+					const { synced, total } = event.data;
+					offlineSyncMessage = `Synced ${synced}/${total} offline items`;
+					setTimeout(() => { offlineSyncMessage = ''; }, 3000);
+				}
+			});
+		}
+
+		// Online/offline detection
+		const updateOnlineStatus = () => {
+			isOffline = !navigator.onLine;
+			if (navigator.onLine && navigator.serviceWorker?.controller) {
+				navigator.serviceWorker.controller.postMessage({ type: 'SYNC_OFFLINE' });
+			}
+		};
+		window.addEventListener('online', updateOnlineStatus);
+		window.addEventListener('offline', updateOnlineStatus);
+		isOffline = !navigator.onLine;
+
+		return () => {
+			window.removeEventListener('online', updateOnlineStatus);
+			window.removeEventListener('offline', updateOnlineStatus);
+		};
 	});
 
 	const navItems = [
-		{ href: '/', label: 'Inbox', icon: '📥' },
-		{ href: '/active', label: 'Active', icon: '⚡' },
-		{ href: '/chat', label: 'Chat', icon: '💬' },
-		{ href: '/agents', label: 'Agents', icon: '🤖' },
-		{ href: '/search', label: 'Search', icon: '🔍' },
+		{ href: '/', label: 'Inbox', icon: '\uD83D\uDCE5' },
+		{ href: '/active', label: 'Active', icon: '\u26A1' },
+		{ href: '/chat', label: 'Chat', icon: '\uD83D\uDCAC' },
+		{ href: '/agents', label: 'Agents', icon: '\uD83E\uDD16' },
+		{ href: '/search', label: 'Search', icon: '\uD83D\uDD0D' },
 	];
 </script>
 
 <div class="flex flex-col h-screen">
+	<!-- Offline banner -->
+	{#if isOffline}
+		<div class="bg-amber-600/90 text-white text-xs text-center py-1.5 px-4 flex-shrink-0">
+			Offline — items will sync when you reconnect
+		</div>
+	{/if}
+
+	{#if offlineSyncMessage}
+		<div class="bg-green-600/90 text-white text-xs text-center py-1.5 px-4 flex-shrink-0 slide-in">
+			{offlineSyncMessage}
+		</div>
+	{/if}
+
 	<!-- Main content area -->
 	<main class="flex-1 overflow-y-auto pb-20">
 		<slot />

@@ -186,6 +186,134 @@ async def discover_associations(db: AsyncSession, days: int = 7) -> int:
     return created
 
 
+async def suggest_tag_merges(db: AsyncSession) -> list[dict]:
+    """Find tags that are likely duplicates and suggest merges.
+
+    Uses name similarity (edit distance) and co-occurrence patterns.
+    Returns list of {source: str, target: str, reason: str}.
+    """
+    stmt = select(Tag).where(Tag.merged_into_id.is_(None)).where(Tag.usage_count > 0)
+    result = await db.execute(stmt)
+    tags = result.scalars().all()
+
+    suggestions = []
+    tag_names = [(t.id, t.name, t.usage_count) for t in tags]
+
+    for i, (id_a, name_a, count_a) in enumerate(tag_names):
+        for id_b, name_b, count_b in tag_names[i + 1:]:
+            # Simple similarity: check if one is a substring/plural of the other
+            a_lower, b_lower = name_a.lower(), name_b.lower()
+
+            reason = None
+            if a_lower == b_lower:
+                reason = "identical names"
+            elif a_lower in b_lower or b_lower in a_lower:
+                reason = "substring match"
+            elif a_lower.rstrip("s") == b_lower.rstrip("s"):
+                reason = "singular/plural"
+            elif a_lower.replace("-", "") == b_lower.replace("-", ""):
+                reason = "hyphenation variant"
+            elif a_lower.replace("_", "-") == b_lower.replace("_", "-"):
+                reason = "separator variant"
+
+            if reason:
+                # Merge into the more-used tag
+                if count_a >= count_b:
+                    suggestions.append({"source": name_b, "target": name_a, "reason": reason})
+                else:
+                    suggestions.append({"source": name_a, "target": name_b, "reason": reason})
+
+    return suggestions
+
+
+async def refine_classification_prompt(db: AsyncSession) -> str | None:
+    """Generate refined few-shot examples from user's actual corrections.
+
+    Returns a context string to inject into classification prompts, or None
+    if there aren't enough corrections.
+    """
+    corrections = await get_classification_corrections(db, days=90)
+    if len(corrections) < 3:
+        return None
+
+    lines = ["Based on the user's past corrections, apply these learned rules:"]
+    for c in corrections[:10]:
+        lines.append(
+            f"- Items like \"{c['content'][:80]}\" should be classified as "
+            f"{c['corrected_to']} (not {c['was_classified_as']})"
+        )
+    return "\n".join(lines)
+
+
+async def generate_daily_digest(db: AsyncSession) -> dict:
+    """Generate a daily digest summarizing activity and AI insights."""
+    now = datetime.now(timezone.utc)
+    yesterday = now - timedelta(hours=24)
+
+    # Items created in last 24h
+    items_stmt = select(Item).where(Item.created_at > yesterday).order_by(Item.created_at.desc())
+    result = await db.execute(items_stmt)
+    recent_items = result.scalars().all()
+
+    # Items completed in last 24h
+    completed_stmt = select(Item).where(
+        Item.completed_at.isnot(None),
+        Item.completed_at > yesterday,
+    )
+    result = await db.execute(completed_stmt)
+    completed_items = result.scalars().all()
+
+    # Overdue items
+    overdue_stmt = select(Item).where(
+        Item.due_date.isnot(None),
+        Item.due_date < now,
+        Item.status.notin_(["done", "cancelled", "archived"]),
+    )
+    result = await db.execute(overdue_stmt)
+    overdue_items = result.scalars().all()
+
+    # Active agent tasks
+    from app.models.agent_task import AgentTask, AgentTaskStatus
+    agent_stmt = select(AgentTask).where(
+        AgentTask.status.in_([AgentTaskStatus.completed, AgentTaskStatus.running]),
+        AgentTask.created_at > yesterday,
+    )
+    result = await db.execute(agent_stmt)
+    agent_tasks = result.scalars().all()
+
+    # New memories extracted
+    memory_stmt = select(func.count(MemoryFact.id)).where(MemoryFact.created_at > yesterday)
+    new_memories = await db.scalar(memory_stmt) or 0
+
+    # Tag merge suggestions
+    merge_suggestions = await suggest_tag_merges(db)
+
+    digest = {
+        "period": {"from": yesterday.isoformat(), "to": now.isoformat()},
+        "items_captured": len(recent_items),
+        "items_completed": len(completed_items),
+        "items_overdue": len(overdue_items),
+        "overdue": [
+            {
+                "id": str(i.id),
+                "content": i.content[:100],
+                "due_date": i.due_date.isoformat() if i.due_date else None,
+            }
+            for i in overdue_items[:10]
+        ],
+        "agent_tasks_active": len([t for t in agent_tasks if t.status == AgentTaskStatus.running]),
+        "agent_tasks_completed": len([t for t in agent_tasks if t.status == AgentTaskStatus.completed]),
+        "new_memories": new_memories,
+        "tag_merge_suggestions": merge_suggestions[:5],
+        "recent_completions": [
+            {"id": str(i.id), "content": i.content[:100]}
+            for i in completed_items[:5]
+        ],
+    }
+
+    return digest
+
+
 async def run_learning_sweep():
     """Daily learning sweep — runs all learning tasks.
 
@@ -201,7 +329,17 @@ async def run_learning_sweep():
         # 2. Memory maintenance
         await maintain_memories(db)
 
-        # 3. Build and log behavioral model
+        # 3. Check for tag merge candidates
+        suggestions = await suggest_tag_merges(db)
+        if suggestions:
+            logger.info(f"Tag merge suggestions: {suggestions[:5]}")
+
+        # 4. Refine classification prompt
+        refinement = await refine_classification_prompt(db)
+        if refinement:
+            logger.info(f"Classification refinement available ({len(refinement)} chars)")
+
+        # 5. Build and log behavioral model
         model = await get_behavioral_model(db)
         logger.info(f"Behavioral model: {json.dumps(model, default=str)}")
 

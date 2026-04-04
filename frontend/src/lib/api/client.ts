@@ -169,6 +169,8 @@ export const api = {
 	behavioralModel: () => request<any>('/learning/model'),
 	associations: (itemId: string) => request<any[]>(`/learning/associations/${itemId}`),
 	interactions: (limit = 50) => request<any[]>(`/learning/interactions?limit=${limit}`),
+	dailyDigest: () => request<any>('/learning/digest'),
+	tagMergeSuggestions: () => request<any[]>('/learning/tag-merge-suggestions'),
 
 	// Chat
 	sendChat: (message: string, conversationId?: string) =>

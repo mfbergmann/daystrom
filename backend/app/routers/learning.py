@@ -12,7 +12,7 @@ from app.core.security import get_current_user
 from app.models.interaction import Interaction, InteractionType
 from app.models.association import Association
 from app.models.item import Item
-from app.services.learning_service import get_behavioral_model
+from app.services.learning_service import get_behavioral_model, generate_daily_digest, suggest_tag_merges
 
 router = APIRouter(prefix="/api/learning", tags=["learning"])
 
@@ -81,3 +81,21 @@ async def item_associations(
             })
 
     return items
+
+
+@router.get("/digest")
+async def daily_digest(
+    db: AsyncSession = Depends(get_db),
+    _user: bool = Depends(get_current_user),
+):
+    """Get a daily digest of activity and AI insights."""
+    return await generate_daily_digest(db)
+
+
+@router.get("/tag-merge-suggestions")
+async def tag_merge_suggestions(
+    db: AsyncSession = Depends(get_db),
+    _user: bool = Depends(get_current_user),
+):
+    """Get suggestions for tags that should be merged."""
+    return await suggest_tag_merges(db)
