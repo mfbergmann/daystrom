@@ -2,6 +2,7 @@
   "name": "daystrom-frontend",
   "version": "2.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite dev --host --port 3000",
     "build": "vite build",

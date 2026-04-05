@@ -3,6 +3,9 @@
 	import { onMount } from 'svelte';
 	import { connectSSE } from '$lib/stores/sse';
 	import { page } from '$app/stores';
+	import type { Snippet } from 'svelte';
+
+	let { children }: { children: Snippet } = $props();
 
 	let isOffline = $state(false);
 	let offlineSyncMessage = $state('');
@@ -69,7 +72,7 @@
 
 	<!-- Main content area -->
 	<main class="flex-1 overflow-y-auto pb-20">
-		<slot />
+		{@render children()}
 	</main>
 
 	<!-- Bottom navigation bar (iOS-style tab bar) -->

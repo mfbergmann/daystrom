@@ -75,6 +75,7 @@
 						<div class="flex items-center gap-3 bg-slate-900 rounded-lg px-3 py-2.5 border border-slate-800">
 							<button
 								onclick={() => completeItem(item.id)}
+								aria-label="Complete item"
 								class="w-5 h-5 rounded-full border-2 border-slate-600 hover:border-green-400
 									hover:bg-green-400/20 transition-colors flex-shrink-0"
 							></button>

@@ -222,21 +222,24 @@
 				<p class="text-slate-500 text-sm text-center py-4">No conversations yet</p>
 			{:else}
 				{#each conversations as conv}
-					<button
+					<div
+						role="button"
+						tabindex="0"
 						on:click={() => loadConversation(conv.id)}
-						class="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/50 text-left group {currentConversationId === conv.id ? 'bg-slate-700/50' : ''}"
+						on:keydown={(e) => e.key === 'Enter' && loadConversation(conv.id)}
+						class="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/50 text-left group cursor-pointer {currentConversationId === conv.id ? 'bg-slate-700/50' : ''}"
 					>
 						<div class="min-w-0 flex-1">
 							<p class="text-sm text-slate-200 truncate">{conv.title || 'Untitled'}</p>
 							<p class="text-xs text-slate-500">{conv.message_count} messages · {formatTime(conv.updated_at)}</p>
 						</div>
 						<button
-							on:click={(e) => deleteConversation(conv.id, e)}
+							on:click|stopPropagation={(e) => deleteConversation(conv.id, e)}
 							class="ml-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 text-xs"
 						>
 							&times;
 						</button>
-					</button>
+					</div>
 				{/each}
 			{/if}
 		</div>
