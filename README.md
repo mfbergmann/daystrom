@@ -82,12 +82,15 @@ Ollama needs to be running and accessible from Docker:
 
 ## Quick Start
 
-```bash
-# 1. Clone the repo
-git clone https://github.com/mfbergmann/daystrom.git
-cd daystrom
+### Option A: Pre-built Images (Recommended)
 
-# 2. Configure environment
+No git clone needed. Just download two files and run:
+
+```bash
+# 1. Create a directory and grab the compose + env files
+mkdir daystrom && cd daystrom
+curl -O https://raw.githubusercontent.com/mfbergmann/daystrom/main/docker-compose.prod.yml
+curl -O https://raw.githubusercontent.com/mfbergmann/daystrom/main/.env.example
 cp .env.example .env
 ```
 
@@ -98,18 +101,39 @@ DB_PASSWORD=daystrom              # PostgreSQL password
 SECRET_KEY=change-me-to-random    # JWT signing key
 PIN=1234                          # App login PIN (leave empty to disable auth)
 
-OLLAMA_BASE_URL=http://host.docker.internal:11434  # Ollama URL
-OLLAMA_MODEL=gemma4:e4b                            # Chat/classification model
-OLLAMA_EMBED_MODEL=nomic-embed-text                # Embedding model
+OLLAMA_BASE_URL=http://192.168.1.50:11434  # Your Ollama URL
+OLLAMA_MODEL=gemma4:e4b                    # Chat/classification model
+OLLAMA_EMBED_MODEL=nomic-embed-text        # Embedding model
 ```
 
 ```bash
+# 2. Pull and start
+docker compose -f docker-compose.prod.yml up -d
+
+# 3. Check status
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f backend
+```
+
+Images are pulled from `ghcr.io/mfbergmann/daystrom-*` automatically. Updates are just `docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d`.
+
+### Option B: Build from Source
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/mfbergmann/daystrom.git
+cd daystrom
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your settings (same as above)
+
 # 3. Build and start
 docker compose up -d
 
 # 4. Check status
 docker compose ps
-docker compose logs -f backend   # Watch backend logs
+docker compose logs -f backend
 ```
 
 The app is available at **http://localhost:3000**.
@@ -118,12 +142,12 @@ The app is available at **http://localhost:3000**.
 
 1. **Install Ollama on Unraid** — The easiest way is via the Community Applications Ollama Docker container. Search for "Ollama" in the Apps tab and install it. Note the container's IP or use the Unraid host IP.
 
-2. **Clone the repo** to a persistent location on your array or a share:
+2. **Download the compose and env files** to a persistent location on your array:
    ```bash
    # From Unraid terminal
-   cd /mnt/user/appdata
-   git clone https://github.com/mfbergmann/daystrom.git
-   cd daystrom
+   mkdir -p /mnt/user/appdata/daystrom && cd /mnt/user/appdata/daystrom
+   curl -O https://raw.githubusercontent.com/mfbergmann/daystrom/main/docker-compose.prod.yml
+   curl -O https://raw.githubusercontent.com/mfbergmann/daystrom/main/.env.example
    cp .env.example .env
    ```
 
@@ -143,14 +167,23 @@ The app is available at **http://localhost:3000**.
    - Go to **Docker > Compose** in the Unraid web UI
    - Click **Add New Stack**
    - Name it `daystrom`
-   - Set the **Compose File** path to `/mnt/user/appdata/daystrom/docker-compose.yml`
+   - Set the **Compose File** path to `/mnt/user/appdata/daystrom/docker-compose.prod.yml`
    - Set the **Env File** path to `/mnt/user/appdata/daystrom/.env`
    - Click **Compose Up**
+
+   The images are pulled automatically from GitHub Container Registry — no building required.
 
 5. **Pull Ollama models** — From the Unraid terminal (or exec into the Ollama container):
    ```bash
    docker exec -it Ollama ollama pull gemma4:e4b
    docker exec -it Ollama ollama pull nomic-embed-text
+   ```
+
+6. **Updating** — To pull new versions, go to the Compose stack in the Unraid UI and click **Compose Pull**, then **Compose Up**. Or from the terminal:
+   ```bash
+   cd /mnt/user/appdata/daystrom
+   docker compose -f docker-compose.prod.yml pull
+   docker compose -f docker-compose.prod.yml up -d
    ```
 
 6. **Persistent data** — The PostgreSQL and Redis volumes are managed by Docker. To store them on a specific Unraid path, you can edit the `volumes` section at the bottom of `docker-compose.yml`:

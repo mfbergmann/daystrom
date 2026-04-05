@@ -1,0 +1,91 @@
+# Production compose file — uses pre-built images from GitHub Container Registry.
+# No git clone or build tools needed on the server.
+#
+# Usage:
+#   curl -O https://raw.githubusercontent.com/mfbergmann/daystrom/main/docker-compose.prod.yml
+#   curl -O https://raw.githubusercontent.com/mfbergmann/daystrom/main/.env.example
+#   cp .env.example .env   # edit with your settings
+#   docker compose -f docker-compose.prod.yml up -d
+
+services:
+  frontend:
+    image: ghcr.io/mfbergmann/daystrom-frontend:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - API_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backend:
+    image: ghcr.io/mfbergmann/daystrom-backend:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://daystrom:${DB_PASSWORD:-daystrom}@db:5432/daystrom
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma4:e4b}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - PIN=${PIN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  worker:
+    image: ghcr.io/mfbergmann/daystrom-backend:latest
+    command: python -m app.workers.main
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://daystrom:${DB_PASSWORD:-daystrom}@db:5432/daystrom
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma4:e4b}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: daystrom
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-daystrom}
+      POSTGRES_DB: daystrom
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U daystrom"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
