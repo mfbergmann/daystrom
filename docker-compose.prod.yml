@@ -1,0 +1,91 @@
+# Daystrom — Intelligent Todo & Idea Capture
+# Paste this into Unraid Docker Compose Manager or save as docker-compose.yml.
+# Edit the values below to match your setup, then Compose Up.
+
+services:
+  frontend:
+    image: ghcr.io/mfbergmann/daystrom-frontend:latest
+    container_name: daystrom-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - API_URL=http://daystrom-backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  backend:
+    image: ghcr.io/mfbergmann/daystrom-backend:latest
+    container_name: daystrom-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://daystrom:daystrom@daystrom-db:5432/daystrom
+      - REDIS_URL=redis://daystrom-redis:6379/0
+      - SECRET_KEY=CHANGE-ME-TO-A-RANDOM-STRING
+      - PIN=1234
+      # ── Ollama ──────────────────────────────────────────────
+      # Point this at your Ollama instance.
+      # If Ollama runs on the same Unraid server, use your server IP.
+      # Example: http://192.168.1.50:11434
+      - OLLAMA_BASE_URL=http://192.168.1.50:11434
+      - OLLAMA_MODEL=gemma4:e4b
+      - OLLAMA_EMBED_MODEL=nomic-embed-text
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  worker:
+    image: ghcr.io/mfbergmann/daystrom-backend:latest
+    container_name: daystrom-worker
+    restart: unless-stopped
+    command: python -m app.workers.main
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://daystrom:daystrom@daystrom-db:5432/daystrom
+      - REDIS_URL=redis://daystrom-redis:6379/0
+      - SECRET_KEY=CHANGE-ME-TO-A-RANDOM-STRING
+      - OLLAMA_BASE_URL=http://192.168.1.50:11434
+      - OLLAMA_MODEL=gemma4:e4b
+      - OLLAMA_EMBED_MODEL=nomic-embed-text
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: daystrom-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: daystrom
+      POSTGRES_PASSWORD: daystrom
+      POSTGRES_DB: daystrom
+    volumes:
+      - /mnt/user/appdata/daystrom/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U daystrom"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: daystrom-redis
+    restart: unless-stopped
+    volumes:
+      - /mnt/user/appdata/daystrom/redis:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

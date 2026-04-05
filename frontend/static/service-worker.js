@@ -13,6 +13,9 @@ const PRECACHE_URLS = [
 	'/icons/icon-512.png',
 ];
 
+// Auth token, passed from the main thread
+let authToken = null;
+
 // Install: precache shell assets
 self.addEventListener('install', (event) => {
 	event.waitUntil(
@@ -33,7 +36,7 @@ self.addEventListener('activate', (event) => {
 	self.clients.claim();
 });
 
-// Fetch: network-first for API, cache-first for static assets
+// Fetch: network-only for API, cache-first for static assets
 self.addEventListener('fetch', (event) => {
 	const url = new URL(event.request.url);
 
@@ -50,14 +53,10 @@ self.addEventListener('fetch', (event) => {
 		return;
 	}
 
-	// Don't cache SSE or event streams
-	if (url.pathname.startsWith('/api/events')) return;
-
-	// API requests: network-first with cache fallback
-	if (url.pathname.startsWith('/api/')) {
-		event.respondWith(networkFirst(event.request));
-		return;
-	}
+	// Don't intercept API requests — avoid caching sensitive/user-specific data.
+	// Let them go straight to the network. Offline API calls will just fail
+	// gracefully in the UI.
+	if (url.pathname.startsWith('/api/')) return;
 
 	// Static assets: cache-first
 	event.respondWith(cacheFirst(event.request));
@@ -79,26 +78,6 @@ async function cacheFirst(request) {
 		const cached = await caches.match('/');
 		if (cached) return cached;
 		return new Response('Offline', { status: 503 });
-	}
-}
-
-async function networkFirst(request) {
-	try {
-		const response = await fetch(request);
-		// Cache successful GET API responses
-		if (response.ok) {
-			const cache = await caches.open(CACHE_NAME);
-			cache.put(request, response.clone());
-		}
-		return response;
-	} catch {
-		// Fall back to cache
-		const cached = await caches.match(request);
-		if (cached) return cached;
-		return new Response(JSON.stringify({ error: 'offline' }), {
-			status: 503,
-			headers: { 'Content-Type': 'application/json' },
-		});
 	}
 }
 
@@ -190,10 +169,16 @@ async function handleOfflineCapture(request) {
 	}
 }
 
-// Sync queued items when back online
+// Handle messages from the main thread
 self.addEventListener('message', async (event) => {
 	if (event.data && event.data.type === 'SYNC_OFFLINE') {
+		// Accept token from main thread for authenticated sync
+		if (event.data.token) {
+			authToken = event.data.token;
+		}
 		await syncOfflineQueue();
+	} else if (event.data && event.data.type === 'SET_TOKEN') {
+		authToken = event.data.token || null;
 	}
 });
 
@@ -201,13 +186,19 @@ async function syncOfflineQueue() {
 	const items = await getQueuedItems();
 	if (items.length === 0) return;
 
+	// Build auth headers
+	const headers = { 'Content-Type': 'application/json' };
+	if (authToken) {
+		headers['Authorization'] = `Bearer ${authToken}`;
+	}
+
 	let synced = 0;
 	for (const item of items) {
 		try {
 			const { id, queued_at, ...body } = item;
 			const response = await fetch('/api/items/capture', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers,
 				body: JSON.stringify(body),
 			});
 			if (response.ok) synced++;

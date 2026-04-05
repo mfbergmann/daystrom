@@ -61,10 +61,15 @@ async def extract_memories(db: AsyncSession, item_content: str, item_id: UUID) -
             if not fact_content:
                 continue
 
+            try:
+                memory_type = MemoryType(fact_data.get("memory_type", "fact"))
+            except ValueError:
+                memory_type = MemoryType.fact
+
             embedding = await generate_embedding(fact_content)
             fact = MemoryFact(
                 content=fact_content,
-                memory_type=MemoryType(fact_data.get("memory_type", "fact")),
+                memory_type=memory_type,
                 embedding=embedding,
                 source_item_ids=[str(item_id)],
             )

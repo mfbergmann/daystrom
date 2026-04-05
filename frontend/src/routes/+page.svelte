@@ -140,7 +140,7 @@
 												const refreshed = await api.getItem(item.id);
 												updateItemInStore(refreshed);
 											}}
-											class="inline-flex items-center gap-0.5 bg-slate-800 rounded-full px-2.5 py-0.5 text-xs text-slate-400
+											class="group inline-flex items-center gap-0.5 bg-slate-800 rounded-full px-2.5 py-0.5 text-xs text-slate-400
 												hover:bg-red-900/30 hover:text-red-400 transition-colors cursor-pointer
 												{tag.source === 'user' ? 'border border-blue-800' : ''}"
 											title="Click to remove tag"
