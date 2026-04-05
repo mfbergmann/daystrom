@@ -9,8 +9,39 @@
 
 	let isOffline = $state(false);
 	let offlineSyncMessage = $state('');
+	let loggedIn = $state(false);
+	let pinInput = $state('');
+	let loginError = $state('');
+	let authRequired = $state(true);
+
+	async function checkAuth() {
+		const token = localStorage.getItem('daystrom_token');
+		if (token) { loggedIn = true; return; }
+		try {
+			const r = await fetch('/api/auth/status');
+			const data = await r.json();
+			authRequired = data.auth_required;
+			if (!authRequired) await doLogin('');
+		} catch { loggedIn = true; } // if backend unreachable, let it through to show errors naturally
+	}
+
+	async function doLogin(pin: string) {
+		try {
+			const r = await fetch('/api/auth/login', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ pin })
+			});
+			if (!r.ok) { loginError = 'Incorrect PIN'; return; }
+			const data = await r.json();
+			localStorage.setItem('daystrom_token', data.access_token);
+			loggedIn = true;
+			connectSSE();
+		} catch { loginError = 'Could not reach backend'; }
+	}
 
 	onMount(() => {
+		checkAuth();
 		connectSSE();
 
 		// Register service worker
@@ -56,6 +87,27 @@
 	];
 </script>
 
+{#if !loggedIn && authRequired}
+<div class="flex flex-col items-center justify-center h-screen bg-slate-950 px-6">
+	<p class="text-4xl mb-6">🔒</p>
+	<h1 class="text-white text-xl font-semibold mb-1">Daystrom</h1>
+	<p class="text-slate-500 text-sm mb-8">Enter your PIN to continue</p>
+	<form onsubmit={(e) => { e.preventDefault(); doLogin(pinInput); }} class="w-full max-w-xs flex flex-col gap-3">
+		<input
+			type="password"
+			inputmode="numeric"
+			placeholder="PIN"
+			bind:value={pinInput}
+			autofocus
+			class="w-full rounded-xl bg-slate-800 text-white px-4 py-3 text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-sky-500"
+		/>
+		{#if loginError}<p class="text-red-400 text-sm text-center">{loginError}</p>{/if}
+		<button type="submit" class="w-full rounded-xl bg-sky-600 hover:bg-sky-500 text-white py-3 font-medium transition-colors">
+			Unlock
+		</button>
+	</form>
+</div>
+{:else}
 <div class="flex flex-col h-screen">
 	<!-- Offline banner -->
 	{#if isOffline}
@@ -91,3 +143,4 @@
 		</div>
 	</nav>
 </div>
+{/if}
