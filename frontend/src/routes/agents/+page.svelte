@@ -162,9 +162,12 @@
 	{:else}
 		<div class="space-y-3">
 			{#each tasks as task}
-				<button
+				<div
+					role="button"
+					tabindex="0"
 					on:click={() => toggleExpand(task.id)}
-					class="w-full text-left rounded-xl bg-slate-800/60 p-4 hover:bg-slate-800 transition-colors"
+					on:keydown={(e) => e.key === 'Enter' && toggleExpand(task.id)}
+					class="w-full text-left rounded-xl bg-slate-800/60 p-4 hover:bg-slate-800 transition-colors cursor-pointer"
 				>
 					<div class="flex items-start gap-3">
 						<span class="text-lg flex-shrink-0">{typeIcon(task.task_type)}</span>
@@ -222,7 +225,7 @@
 							{/if}
 						</div>
 					{/if}
-				</button>
+				</div>
 			{/each}
 		</div>
 
